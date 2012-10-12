@@ -6,9 +6,11 @@ import cc.spray.can.client.HttpClient
 import cc.spray.client.HttpConduit
 import cc.spray.httpx.SprayJsonSupport
 import cc.spray.http._
-
 import cc.spray.json.{JsonFormat, DefaultJsonProtocol}
 
+import org.jsoup.Jsoup
+
+import scala.collection.JavaConverters._
 
 case class Elevation(location: Location, elevation: Double)
 case class Location(lat: Double, lng: Double)
@@ -39,7 +41,7 @@ object Main extends App {
     name = "http-client"
   )
 
-  startExample2()
+  example1()
 
   // finally we drop the main thread but hook the shutdown of
   // our IOBridge into the shutdown of the applications ActorSystem
@@ -47,31 +49,42 @@ object Main extends App {
     ioBridge.stop()
   }
 
-  ///////////////////////////////////////////////////
-
-  def startExample1() {
+  def example1() {
     log.info("Getting http://github.com ...")
     // an HttpConduit gives us access to an HTTP server,
     // it manages a pool of connections to _one_ host/port combination
     val conduit = system.actorOf(
-      props = Props(new HttpConduit(httpClient, "github.com")),
+      props = Props(new HttpConduit(httpClient, "climate.met.psu.edu")),
       name = "http-conduit"
     )
 
     // send a simple request
     val pipeline = HttpConduit.sendReceive(conduit)
-    val responseFuture = pipeline(HttpRequest(method = HttpMethods.GET, uri = "/"))
+    val responseFuture = pipeline(HttpRequest(method = HttpMethods.GET, uri = "/www_prod/ida/"))
     responseFuture onComplete {
       case Right(response) =>
-        log.info(
-          """|Response for GET request to github.com:
-             |status : {}
-             |headers: {}
-             |body   : {}""".stripMargin,
-          response.status.value, response.headers.mkString("\n  ", "\n  ", ""), response.entity.asString
-        )
-        system.stop(conduit) // the conduit can be stopped when all operations on it have been completed
-        startExample2()
+	val body = response.entity.asString
+        val doc = Jsoup.parse(body)
+        // println(doc)
+        
+	val chooser = doc.getElementById("dbSelect")
+        println(chooser.select("option").asScala map (e => e.attr("value")))
+
+	// val values = for(x <- chooser.select("option")) { (e => e.attr("value")) }
+        //println(values)
+	
+      
+	system.stop(conduit)
+	system.shutdown()
+        // log.info(
+        //   """|Response for GET request to github.com:
+        //      |status : {}
+        //      |headers: {}
+        //      |body   : {}""".stripMargin,
+        //   response.status.value, response.headers.mkString("\n  ", "\n  ", ""), response.entity.asString
+        // )
+        // system.stop(conduit) // the conduit can be stopped when all operations on it have been completed
+        // startExample2()
 
       case Left(error) =>
         log.error(error, "Couldn't get http://github.com")
