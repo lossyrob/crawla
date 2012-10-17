@@ -1,14 +1,19 @@
-package org.pd.crawla
+package org.projective.crawla
 
 import akka.actor.{Props, ActorSystem}
+import akka.pattern.ask
+import akka.util.Timeout
+import akka.util.duration._
 import cc.spray.io.IOBridge
 import cc.spray.can.client.HttpClient
 import cc.spray.client.HttpConduit
 import cc.spray.httpx.SprayJsonSupport
 import cc.spray.http._
 import cc.spray.json.{JsonFormat, DefaultJsonProtocol}
+import java.net.URL
 
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 
 import scala.collection.JavaConverters._
 
@@ -41,12 +46,23 @@ object Main extends App {
     name = "http-client"
   )
 
-  example1()
+  implicit val timeout = Timeout(5 seconds)
 
-  // finally we drop the main thread but hook the shutdown of
-  // our IOBridge into the shutdown of the applications ActorSystem
-  system.registerOnTermination {
-    ioBridge.stop()
+  example()
+
+  def example() {
+    val fetcher = system.actorOf(Props(new Fetcher(httpClient)), name = "fetcher")
+    val response = fetcher ? FetchRequest(new URL("http://climate.met.psu.edu/www_prod/ida/"))
+    response onComplete {
+      case Right(result) =>
+	val doc = result.asInstanceOf[Document]
+	val chooser = doc.getElementById("dbSelect")
+        println(chooser.select("option").asScala map (e => e.attr("value")))
+        system.shutdown()
+      case Left(error) =>
+	log.error(error, "Could not fetch")
+        system.shutdown()
+    }
   }
 
   def example1() {
@@ -65,53 +81,14 @@ object Main extends App {
       case Right(response) =>
 	val body = response.entity.asString
         val doc = Jsoup.parse(body)
-        // println(doc)
         
 	val chooser = doc.getElementById("dbSelect")
         println(chooser.select("option").asScala map (e => e.attr("value")))
-
-	// val values = for(x <- chooser.select("option")) { (e => e.attr("value")) }
-        //println(values)
-	
-      
+        
 	system.stop(conduit)
 	system.shutdown()
-        // log.info(
-        //   """|Response for GET request to github.com:
-        //      |status : {}
-        //      |headers: {}
-        //      |body   : {}""".stripMargin,
-        //   response.status.value, response.headers.mkString("\n  ", "\n  ", ""), response.entity.asString
-        // )
-        // system.stop(conduit) // the conduit can be stopped when all operations on it have been completed
-        // startExample2()
-
       case Left(error) =>
         log.error(error, "Couldn't get http://github.com")
-        system.shutdown()
-    }
-  }
-
-  def startExample2() {
-    log.info("Requesting the elevation of Mt. Everest from Googles Elevation API...")
-    val conduit = system.actorOf(
-      props = Props(new HttpConduit(httpClient, "maps.googleapis.com")),
-      name = "http-conduit"
-    )
-
-    import HttpConduit._
-    import ElevationJsonProtocol._
-    import SprayJsonSupport._
-    val pipeline = sendReceive(conduit) ~> unmarshal[GoogleApiResult[Elevation]]
-
-    val responseF = pipeline(Get("/maps/api/elevation/json?locations=27.988056,86.925278&sensor=false"))
-    responseF onComplete {
-      case Right(response) =>
-        log.info("The elevation of Mt. Everest is: {} m", response.results.head.elevation)
-        system.shutdown()
-
-      case Left(error) =>
-        log.error(error, "Couldn't get elevation")
         system.shutdown()
     }
   }
