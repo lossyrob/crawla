@@ -13,33 +13,35 @@ case class FetchRequest(url: URL)
 
 class Fetcher(httpClient: ActorRef) extends Actor {
   def receive = {
-    case FetchRequest(url) => Fetch(url)
+    case FetchRequest(url) => Fetch(url, sender)
   }
 
-  def Fetch(url: URL) {
+  def Fetch(url: URL, replyTo: ActorRef) {
     val host = url.getHost
     val path = url.getPath
+
+    context.system.log.info("Hit here 1")
 
     val conduit = context.actorOf(
       props = Props(new HttpConduit(httpClient, host)),
       name = "http-conduit")
 
-    implicit val dispatcher = context.system.dispatcher
-
-    val promise = Promise[Document]
-
     val responseFuture = HttpConduit
-		    .sendReceive(conduit)(HttpRequest(method = HttpMethods.GET, uri = path))
+		    .sendReceive(conduit)(
+		       HttpRequest(method = HttpMethods.GET, uri = path)
+		    )
 
-      responseFuture onComplete {
-	case Right(response) => 
+    context.system.log.info("Response future created")
+    
+    import akka.pattern.pipe
+
+    (responseFuture map {
+	response  => 
+	  context.system.log.info("Mapping response")
 	  context.stop(conduit)
 	  val doc = Jsoup.parse(response.entity.asString)
-	  promise.success(doc)
-	case Left(error) =>
-	  promise.failure(error)
-      }
-
-    promise
+	  context.system.log.info("Got the doc, returning")
+          doc
+      }) pipeTo replyTo
   }
 }

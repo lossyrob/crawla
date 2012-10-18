@@ -1,6 +1,7 @@
 package org.projective.crawla
 
-import akka.actor.{Props, ActorSystem}
+import akka.actor.{ Props, ActorSystem }
+import akka.dispatch.Await
 import akka.pattern.ask
 import akka.util.Timeout
 import akka.util.duration._
@@ -9,7 +10,7 @@ import cc.spray.can.client.HttpClient
 import cc.spray.client.HttpConduit
 import cc.spray.httpx.SprayJsonSupport
 import cc.spray.http._
-import cc.spray.json.{JsonFormat, DefaultJsonProtocol}
+import cc.spray.json.{ JsonFormat, DefaultJsonProtocol }
 import java.net.URL
 
 import org.jsoup.Jsoup
@@ -24,7 +25,7 @@ case class GoogleApiResult[T](status: String, results: List[T])
 object ElevationJsonProtocol extends DefaultJsonProtocol {
   implicit val locationFormat = jsonFormat2(Location)
   implicit val elevationFormat = jsonFormat2(Elevation)
-  implicit def googleApiResultFormat[T :JsonFormat] = jsonFormat2(GoogleApiResult.apply[T])
+  implicit def googleApiResultFormat[T: JsonFormat] = jsonFormat2(GoogleApiResult.apply[T])
 }
 
 object Main extends App {
@@ -43,24 +44,37 @@ object Main extends App {
   // create and start a spray-can HttpClient
   val httpClient = system.actorOf(
     props = Props(new HttpClient(ioBridge)),
-    name = "http-client"
-  )
+    name = "http-client")
 
   implicit val timeout = Timeout(5 seconds)
 
-  example()
+  try {
+    example()
+  } catch { case e => 
+	    println("SHIT BOMBED!" + e.toString())
+	    system.shutdown() }
 
   def example() {
     val fetcher = system.actorOf(Props(new Fetcher(httpClient)), name = "fetcher")
     val response = fetcher ? FetchRequest(new URL("http://climate.met.psu.edu/www_prod/ida/"))
+    system.log.info("Created response from fetch")
+    val doc = Await.result(response, 5 seconds).asInstanceOf[Document]
+
+    system.log.info("Right complete")
+    val chooser = doc.getElementById("dbSelect")
+
+    system.shutdown()
+
     response onComplete {
       case Right(result) =>
-	val doc = result.asInstanceOf[Document]
-	val chooser = doc.getElementById("dbSelect")
-        println(chooser.select("option").asScala map (e => e.attr("value")))
+        val doc = result.asInstanceOf[Document]
+        system.log.info("Right complete")
+        val chooser = doc.getElementById("dbSelect")
+        log.info((chooser.select("option").asScala.toString))
         system.shutdown()
       case Left(error) =>
-	log.error(error, "Could not fetch")
+        log.info("Left complete")
+        log.error(error, "Could not fetch")
         system.shutdown()
     }
   }
@@ -71,22 +85,21 @@ object Main extends App {
     // it manages a pool of connections to _one_ host/port combination
     val conduit = system.actorOf(
       props = Props(new HttpConduit(httpClient, "climate.met.psu.edu")),
-      name = "http-conduit"
-    )
+      name = "http-conduit")
 
     // send a simple request
     val pipeline = HttpConduit.sendReceive(conduit)
     val responseFuture = pipeline(HttpRequest(method = HttpMethods.GET, uri = "/www_prod/ida/"))
     responseFuture onComplete {
       case Right(response) =>
-	val body = response.entity.asString
+        val body = response.entity.asString
         val doc = Jsoup.parse(body)
-        
-	val chooser = doc.getElementById("dbSelect")
+
+        val chooser = doc.getElementById("dbSelect")
         println(chooser.select("option").asScala map (e => e.attr("value")))
-        
-	system.stop(conduit)
-	system.shutdown()
+
+        system.stop(conduit)
+        system.shutdown()
       case Left(error) =>
         log.error(error, "Couldn't get http://github.com")
         system.shutdown()
