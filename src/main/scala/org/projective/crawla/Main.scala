@@ -12,24 +12,23 @@ import cc.spray.httpx.SprayJsonSupport
 import cc.spray.http._
 import cc.spray.json.{ JsonFormat, DefaultJsonProtocol }
 import java.net.URL
+import java.util.Date
+import java.text.SimpleDateFormat
 
 import org.jsoup.Jsoup
-import org.jsoup.nodes.Document
+import org.jsoup.nodes.{ Document, Element }
 
 import scala.collection.JavaConverters._
 
-case class Elevation(location: Location, elevation: Double)
-case class Location(lat: Double, lng: Double)
-case class GoogleApiResult[T](status: String, results: List[T])
-
-object ElevationJsonProtocol extends DefaultJsonProtocol {
-  implicit val locationFormat = jsonFormat2(Location)
-  implicit val elevationFormat = jsonFormat2(Elevation)
-  implicit def googleApiResultFormat[T: JsonFormat] = jsonFormat2(GoogleApiResult.apply[T])
+case class Site(id: String, url: URL, name: String,
+  county: String, lat: Double, long: Double, elevation: Double, start: Date, end: Date) {
+  override def toString = "[id]: %s  [url]: %s  [name]: %s  [county]: %s  [lat]: %f  [long]: %f  [elevation]: %f  [start]: %s  [end]: %s".format(id, url.toString, name, county, lat, long, elevation, start, end)
 }
 
 object Main extends App {
-  // we need an ActorSystem to host our application in
+
+  val dateFormat = new SimpleDateFormat("yyyy-MM-dd")
+
   val system = ActorSystem("crawla")
   def log = system.log
 
@@ -48,37 +47,95 @@ object Main extends App {
 
   implicit val timeout = Timeout(5 seconds)
 
+  val mainUrl = new URL("http://climate.met.psu.edu/www_prod/ida/")
+
+  val siteListUrl = new URL(mainUrl + "siteList.php")
+  val submitUrl = new URL(mainUrl + "submit.php")
+
+  val fetcher = system.actorOf(Props(new Fetcher(httpClient)), name = "fetcher")
+  val crawler = new Crawler(fetcher)
+
   try {
     run()
-  } 
-  catch { 
-    case e => 
+  } catch {
+    case e =>
       println("SHIT BOMBED!" + e.toString())
-      system.shutdown() 
+      system.shutdown()
+  }
+
+  def parseFirst(doc: Document) = {
+    val chooser = doc.getElementById("dbSelect")
+    chooser.select("option")
+      .asScala
+      .drop(1) // First option is default, 0
+      .map { e => e.attr("value") }
+  }
+
+  def getSiteListData(s: String): String = {
+    "x=" + s + "&t=1"
+  }
+
+  def parseSecond(doc: Document) = {
+    doc.getElementsByTag("tr")
+      .asScala
+      .filter { node => node.getElementsByTag("th").isEmpty }
+      .map(createSiteFromTableRow)
+  }
+
+  def createSiteFromTableRow(tr: Element): Site = {
+    val id = tr.child(0).child(0).text
+    val url = new URL(mainUrl + tr.child(0).child(0).attr("href"))
+    val name = tr.child(1).text
+    val county = tr.child(2).text
+    // State is child(3)
+    val lat = tr.child(4).text.toDouble
+    val long = tr.child(5).text.toDouble
+    val elevation = tr.child(6).text.toDouble
+    val start = dateFormat.parse(tr.child(7).text)
+    val end = dateFormat.parse(tr.child(8).text)
+
+    Site(id, url, name, county, lat, long, elevation, start, end)
   }
 
   def run() {
-    val fetcher = system.actorOf(Props(new Fetcher(httpClient)), name = "fetcher")
-    val parser = system.actorOf(Props[Parser], name = "parser")
-    (fetcher ? new URL("http://climate.met.psu.edu/www_prod/ida/")).mapTo[Document]
-      .flatMap { doc => (parser ? doc).mapTo[Seq[String]] }
-      .onSuccess { case result => 
-	      log.info(result.reduceLeft { (a,b) => a + ", " + b} )
-	      system.shutdown()
-	 }
+    (crawler.crawl(mainUrl)(parseFirst))
+      .map { dbNames =>
+        dbNames map { dbName =>
+          (crawler.crawl(siteListUrl, getSiteListData(dbName))(parseSecond))
+            .map { sites =>
+              sites map {
+                site => processSite(site, dbName)
+              }
+            }
+        }
+      }
 
-    // response onComplete {
-    //   case Right(doc) =>
-    //     val chooser = doc.getElementById("dbSelect")
-    //     log.info(chooser.select("option")
-    // 		        .asScala
-    // 		        .drop(1) // First option is default, 0
-    // 			.map { e => e.attr("value") }
-    // 			.reduceLeft { (a,b) => a + ", " + b} )
-    //     system.shutdown()
-    //   case Left(error) =>
-    //     log.error(error, "Could not fetch")
-    //     system.shutdown()
-    // }
+    // TODO: Figure out a way to close out io bridge after all futures complete.
+    //       If we don't then system hangs, and without time out will not ever return.
+    log.info("Before await")
+    system.awaitTermination(10 seconds)
+    log.info("after wait")
+  }
+
+  def processSite(site: Site, dbName: String) = {
+    log.info("Crawling " + site.url.toString)
+    crawler.crawl(site.url) { doc =>
+
+      doc.getElementsByTag("input")
+        .asScala
+        .filter { e => e.attr("name") == "choices[]" }
+        .map { e => "choices[]=" + e.attr("value") }
+        .reduceLeft { (a, b) => a + "&" + b }
+    } map { choices =>
+      log.info(choices)
+      val data = ("siteId=%s&" +
+        "db=%s&" +
+        "datastart=%s&" +
+        "dataend=%s&" +
+        "filetype=web&" + choices)
+        .format(site.id, dbName, dateFormat.format(site.start), dateFormat.format(site.end))
+      crawler.crawl(submitUrl, data)(doc => doc.head.toString)
+        .map { s => log.info(s) }
+    }
   }
 }

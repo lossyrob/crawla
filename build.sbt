@@ -1,3 +1,9 @@
+autoCompilerPlugins := true
+
+addCompilerPlugin("org.scala-lang.plugins" % "continuations" % "2.9.1")
+
+scalacOptions += "-P:continuations:enable"
+
 libraryDependencies += "com.github.scopt" %% "scopt" % "2.1.0"
 
 libraryDependencies += "org.jsoup" % "jsoup" % "1.6.1"
