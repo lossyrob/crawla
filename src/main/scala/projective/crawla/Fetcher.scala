@@ -1,22 +1,29 @@
-package org.projective.crawla
+package projective.crawla
 
-import akka.dispatch.{ Promise, Future }
-import akka.actor.{ Actor, ActorRef, Props }
+import akka.actor.{Actor, ActorRef, ActorSystem, PoisonPill, Props}
+import akka.dispatch.Future
 import akka.pattern.pipe
 import cc.spray.can.client.HttpClient
 import cc.spray.client.HttpConduit
+import cc.spray.client.HttpConduit.sendReceive
 import cc.spray.http._
+import cc.spray.io.IOBridge
 import java.net.URL
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import scala.collection.mutable.HashMap
 
-import HttpConduit.sendReceive
-
 case class FetchRequest(url: URL, data: String)
 
-class Fetcher(httpClient: ActorRef) extends Actor {
+class Fetcher extends Actor {
   val conduits = new HashMap[String, ActorRef]
+
+  var ioBridge = new IOBridge(context.system).start()
+  var httpClient = context.actorOf(Props(new HttpClient(ioBridge)), "http-client")
+
+  override def postStop() {
+    ioBridge.stop()
+  }
 
   def receive = {
     case url: URL => fetch(conduitFor(url), requestFor(url))
@@ -34,7 +41,7 @@ class Fetcher(httpClient: ActorRef) extends Actor {
   def requestFor(url: URL) = {
     val path = url.getQuery match {
       case null => url.getPath
-      case _ =>  url.getPath + "?" + url.getQuery
+      case _ => url.getPath + "?" + url.getQuery
     }
     HttpRequest(method = HttpMethods.GET, uri = path)
   }
@@ -42,14 +49,10 @@ class Fetcher(httpClient: ActorRef) extends Actor {
   def requestFor(url: URL, data: String) = {
     val path = url.getPath
     val entity = HttpBody(ContentType(MediaTypes.`application/x-www-form-urlencoded`), data)
-    context.system.log.info("POST for " + url.toString + "  and entity " + entity.toString())
     HttpRequest(method = HttpMethods.POST, uri = path, entity = entity)
   }
 
   def fetch(conduit: ActorRef, request: HttpRequest) = {
-    import akka.util.Timeout
-    import akka.util.duration._
-    implicit val timeOut = Timeout(3 seconds)
     val recipient = sender
     val responseFuture = sendReceive(conduit)(request)
     val result = (responseFuture map { response => Jsoup.parse(response.entity.asString) })

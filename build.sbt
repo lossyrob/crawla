@@ -8,6 +8,8 @@ libraryDependencies += "com.github.scopt" %% "scopt" % "2.1.0"
 
 libraryDependencies += "org.jsoup" % "jsoup" % "1.6.1"
 
+libraryDependencies += "org.scalaj" %% "scalaj-time" % "0.6"
+
 libraryDependencies += "com.ning" % "async-http-client" % "1.6.4" % "compile"
 
 // Spray
@@ -22,6 +24,9 @@ libraryDependencies ++= Seq(
                     "com.typesafe.akka" %   "akka-slf4j" % "2.0.3",
                     "com.typesafe.akka" %   "akka-testkit" % "2.0.3"
 )
+
+// Dispatch
+libraryDependencies += "net.databinder.dispatch" %% "dispatch-core" % "0.9.2"
 
 resolvers += "typesafe repo"  at "http://repo.typesafe.com/typesafe/releases/"
 
