@@ -5,7 +5,8 @@ object Main extends App {
   val crawler = new Crawler()
 
   try {
-    new Weather(crawler).run()
+    // new Weather(crawler).run()
+    new Elevation(crawler).run()
   } catch {
     case e =>
       println("ERROR: " + e.toString())
