@@ -12,6 +12,10 @@ libraryDependencies += "org.scalaj" %% "scalaj-time" % "0.6"
 
 libraryDependencies += "com.ning" % "async-http-client" % "1.6.4" % "compile"
 
+libraryDependencies += "com.beust" % "jcommander" % "1.23"
+
+libraryDependencies += "org.reflections" % "reflections" % "0.9.5"
+
 // Spray
 libraryDependencies ++= Seq(
                     "cc.spray" % "spray-client" % "1.0-M3-SNAPSHOT-20121008",

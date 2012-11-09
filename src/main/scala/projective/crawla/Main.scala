@@ -1,17 +1,12 @@
 package projective.crawla
 
+import projective.crawla.commands._
+
 object Main extends App {
-
-  val crawler = new Crawler()
-
   try {
-    // new Weather(crawler).run()
-    new Elevation(crawler).run()
+    Tasks.run(args)
   } catch {
     case e =>
       println("ERROR: " + e.toString())
   }
-
-  scala.Console.in.read.toChar
-  crawler.shutdown()
 }
