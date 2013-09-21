@@ -4,8 +4,6 @@ import com.beust.jcommander._
 
 import  scala.collection._
 
-// ** Taken from azavea/geotrellis ** //
- 
 // Command line tool to run crawla tasks.
 
 /**
