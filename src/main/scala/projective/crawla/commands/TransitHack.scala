@@ -62,8 +62,15 @@ case class ResourceUrl(category:Category,url:URL,crawler:Crawler,collector:Actor
           d.apply(0)
            .getElementsByTag("li")
            .asScala
-           .map( _.text.replace("View Map","").trim)
-           .toList
+           .map { li => 
+            li.getElementsByTag("a")
+              .asScala
+              .map { a =>
+                val title = a.attr("title")
+                title.substring(0,title.indexOf("|")).trim
+               }
+              .toList
+           }.flatten.toList
         } else { List[String]() }
       }
 
@@ -98,7 +105,7 @@ case class ResourceUrl(category:Category,url:URL,crawler:Crawler,collector:Actor
           d.apply(0)
            .getElementsByTag("a")
            .asScala
-           .map( _.attr("href"))
+           .map( _.attr("href").replace("",""))           
            .toList
         } else { List[String]() }
       }
@@ -193,7 +200,7 @@ class TransitHackTask extends Task {
               Category(title,name,new URL(base + a.attr("href")))
              }
             .toList
-        }), Duration(5, TimeUnit.SECONDS))
+        }), Duration(50, TimeUnit.SECONDS))
       }).flatten
 
     val resourceUrls =
@@ -203,7 +210,7 @@ class TransitHackTask extends Task {
             .getElementsByTag("li")
             .asScala
             .map(createResourceUrl(category,_,crawler,collector))
-        }), Duration(5, TimeUnit.SECONDS))
+        }), Duration(50, TimeUnit.SECONDS))
       }).flatten
 
     (for(r <- resourceUrls) yield {
