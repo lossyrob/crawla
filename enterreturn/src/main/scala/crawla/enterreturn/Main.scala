@@ -20,17 +20,15 @@ object Main {
     ).map(base + _)
      .map(new URL(_))
 
-    val pipeline = 
-      new CategoryCrawler >>
-      new SubcategoryCrawler >>
-      new ResourceCrawler
+    val crawla = 
+      Crawla.create {
+        new CategoryCrawler >>
+        new SubcategoryCrawler >>
+        new ResourceCrawler
+      }
 
-    Crawla.register(pipeline)
-
-    for(url <- urls) { Crawla.crawl(url) }
-
-    for(event <- observable) {
-      // Place resource in databse.
+    crawler.crawl(urls).subscribe { resource =>
+      //place resource in the database
     }
   }
 }
@@ -44,7 +42,7 @@ trait Crawler[T] {
   protected def emit[T](v:T):Unit
 }
 
-case class CategoryCrawler extends Crawler[Category] {
+case class CategoryCrawler extends UrlCrawler[Category] {
   def recieve(doc:Document) = {
     val title =
       doc.getElementsByTag("h1")
