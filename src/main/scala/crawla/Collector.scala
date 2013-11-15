@@ -1,4 +1,4 @@
-package projective.crawla.commands
+package crawla.commands
 
 import akka.actor._
 //import scala.concurrent.duration._

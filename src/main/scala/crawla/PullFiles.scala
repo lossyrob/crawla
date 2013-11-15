@@ -1,4 +1,4 @@
-package projective.crawla.commands
+package crawla.commands
 
 import akka.dispatch.Await
 import akka.pattern.ask
@@ -8,32 +8,31 @@ import java.util.concurrent.TimeUnit
 import org.jsoup.nodes.{ Document, Element }
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
-import com.beust.jcommander._
 
 import scala.sys.process._
 import java.net.URL
 import java.io.File
 
-import projective.crawla._
+import crawla._
 
-@Parameters(commandNames = Array("pull-files"), commandDescription = "Downloads all links to a specific file type do a specified directory from a given page.")
-class PullFilesTask extends Task {
-  @Parameter(
-    names = Array("--filetype", "-f"),
-    description = "The extension of the file type that you want to download",
-    required = true)
+// @Parameters(commandNames = Array("pull-files"), commandDescription = "Downloads all links to a specific file type do a specified directory from a given page.")
+class PullFilesTask {//extends Task {
+  // @Parameter(
+  //   names = Array("--filetype", "-f"),
+  //   description = "The extension of the file type that you want to download",
+  //   required = true)
   var fileType: String = _
 
-  @Parameter(
-    names = Array("--dir", "-d"),
-    description = "Path of directory to place downloaded files",
-    required = true)
+  // @Parameter(
+  //   names = Array("--dir", "-d"),
+  //   description = "Path of directory to place downloaded files",
+  //   required = true)
   var outDir: String = _
 
-  @Parameter(
-    names = Array("--site", "-s"),
-    description = "URL of the page you want to crawl.",
-    required = true)
+  // @Parameter(
+  //   names = Array("--site", "-s"),
+  //   description = "URL of the page you want to crawl.",
+  //   required = true)
   var site: String = _
 
   val taskName = "pull-files"

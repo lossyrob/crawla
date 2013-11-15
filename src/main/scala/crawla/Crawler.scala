@@ -1,4 +1,4 @@
-package projective.crawla
+package crawla
 
 import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.routing.SmallestMailboxRouter
@@ -39,3 +39,4 @@ class Crawler {
     system.shutdown()
   }
 }
+

@@ -1,12 +1,7 @@
-package projective.crawla
+package crawla
 
-import projective.crawla.commands._
+object Main  {
+  def main(args:Array[String]):Unit = {
 
-object Main extends App {
-  try {
-    Tasks.run(args)
-  } catch {
-    case e =>
-      println("ERROR: " + e.toString())
   }
 }

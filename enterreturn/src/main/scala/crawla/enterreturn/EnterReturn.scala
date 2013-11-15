@@ -1,4 +1,6 @@
-package projective.crawla.commands
+package crawla.enterreturn
+
+import crawla._
 
 import akka.actor._
 import akka.dispatch.Await
@@ -11,7 +13,6 @@ import java.util.concurrent.TimeUnit
 import org.jsoup.nodes.{ Document, Element }
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
-import com.beust.jcommander._
 
 import scala.sys.process._
 import java.net.URL
@@ -19,7 +20,7 @@ import java.io.File
 
 import scala.collection.mutable
 
-import projective.crawla._
+import crawla._
 
 case class Category(root:String,name:String,url:URL)
 
@@ -134,7 +135,7 @@ case class ResourceUrl(category:Category,url:URL,crawler:Crawler,collector:Actor
  * Scrape websites for the transit hackathon September 2013.
  */
 
-@Parameters(commandNames = Array("transithack"), commandDescription = "Scrape prison resources.")
+//@Parameters(commandNames = Array("transithack"), commandDescription = "Scrape prison resources.")
 class TransitHackTask extends Task {
   implicit val timeout = new Timeout(300 seconds)
 

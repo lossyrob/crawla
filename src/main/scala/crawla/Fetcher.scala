@@ -1,4 +1,4 @@
-package projective.crawla
+package crawla
 
 import akka.actor.{Actor, ActorRef, ActorSystem, PoisonPill, Props}
 import akka.dispatch.Future
