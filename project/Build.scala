@@ -28,31 +28,15 @@ object CrawlaBuild extends Build {
 //    javaOptions in run += "-Xmx2G",
 
     libraryDependencies ++= Seq(
-//      "org.scala-lang" % "scala-reflect" % "2.10.0",
+      "org.scala-lang" % "scala-reflect" % "2.10.0",
       "org.scalatest" % "scalatest_2.10" % "2.0.M5b" % "test",
       "com.github.scopt" %% "scopt" % "2.1.0",
       "org.jsoup" % "jsoup" % "1.6.1",
-      //  "org.scalaj" %% "scalaj-time" % "0.6",
-      "io.spray" % "spray-client" % "1.2-RC2",
-      //  "cc.spray" %%  "spray-json" % "1.",
+      "io.spray" % "spray-client" % "1.2-RC3",
       "com.typesafe.akka" %% "akka-actor" % "2.2.3",
       "com.typesafe.akka" %% "akka-slf4j" % "2.2.3",
-      "com.typesafe.akka" %% "akka-testkit" % "2.2.3"
-
-      // "org.scalatest" % "scalatest_2.10" % "2.0.M5b" % "test",
-      // "org.scala-lang" % "scala-reflect" % "2.10.2",
-      // "junit" % "junit" % "4.5" % "test",
-      // "com.vividsolutions" % "jts" % "1.12",
-      // "com.typesafe.akka" %% "akka-kernel" % "2.2.1",
-      // "com.typesafe.akka" %% "akka-remote" % "2.2.1",
-      // "com.typesafe.akka" %% "akka-actor" % "2.2.1",
-      // "com.typesafe.akka" %% "akka-cluster" % "2.2.1",
-      // "asm" % "asm" % "3.3.1",
-      // "org.codehaus.jackson" % "jackson-core-asl" % "1.6.1",
-      // "org.codehaus.jackson" % "jackson-mapper-asl" % "1.6.1",
-      // "org.spire-math" %% "spire" % "0.4.0",
-      // "com.nativelibs4java" %% "scalaxy-loops" % "0.3-SNAPSHOT" % "provided",
-      // "net.databinder" %% "dispatch-http" % "0.8.10"
+      "com.typesafe.akka" %% "akka-testkit" % "2.2.3",
+      "com.netflix.rxjava" % "rxjava-scala" % "0.14.11"
     ),
 
     resolvers ++= Seq(

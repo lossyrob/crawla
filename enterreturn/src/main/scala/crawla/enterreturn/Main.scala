@@ -2,6 +2,8 @@ package crawla.enterreturn
 
 import org.jsoup.nodes.Document
 
+import rx.lang.scala._
+
 object Main {
   val base = "http://philadelphia.pa.networkofcare.org"
 
@@ -22,27 +24,138 @@ object Main {
 
     val crawla = 
       Crawla.create {
-        new CategoryCrawler >>
+        _ >>
+        new CategoryCrawler >> // Creates a router actor, worker actors to handle UrlRecieved method
         new SubcategoryCrawler >>
         new ResourceCrawler
       }
 
-    crawler.crawl(urls).subscribe { resource =>
+    crawler.crawl(urls) // Sends initial UrlRequest messages to Fetcher, at end of pipeline calls OnNext
+           .subscribe { resource =>
       //place resource in the database
     }
   }
 }
 
+object Crawla {
+  implicit val system = ActorSystem("crawla")
+
+  def create[T](pipeline:RootPipeline=>Pipeline[T]) = {
+    val rootActor = system.actorOf(Props[CrawlerActor], "somename")
+    val pipelineSteps = pipeline(PipelineBuilder(rootActor)).piplineSteps
+    new RootCrawler[T](piplineSteps)
+  }
+}
+
+c// lass CrawlerActor extends Actor {
+//   val fetcher = context.actorOf(Props[Fetcher].withRouter(SmallestMailboxRouter(10)), "routed-fetcher")
+
+//   var _pipeline:Pipeline
+
+//   def recieve = {
+//     case Crawl(url) =>
+//       fetcher ? FetchUrl(url) map (routeFetch(_,0))
+//     case 
+//   }
+// }
+
+class RootCrawler[T](pipelineSteps:List[ActorRef],fetcher:ActorRef) extends ActorRef = {
+  private var publishSubject:PublishSubject[T]
+
+  def crawl(urls:List[URL]):Observable[T] = {
+    publishSubject = PublishSubject.create[T]()
+    for(url <- urls) {
+      fetcher ? FetchUrl(url) map (routeFetch(_,0))
+      pipeline(0) ! Crawl(url)
+    }
+    Observable(publishSubject)
+  }
+
+  def routeFetch(f:FetchResult,step:Int) = {
+    pipelineSteps(0) ! ParseDoc(f.doc)
+  }
+
+  def recieve = {
+    case CrawlResult(t,step) =>
+      if(step == pipelineSteps.length-1) 
+        ps.onNext(t)
+      else
+        fetcher ? FetchUrl(t.url) map { case FetchResult(doc) => pipelineSteps(step+1) ! ParseDoc1(t,doc,step+1) }
+    case _ =>
+//      ps.onError
+      ???
+  }
+}
+
+case class ParsedDoc(doc:Document) { step:Int = 0 }
+case class ParseDoc1[V](v:V,doc:Document,step:Int)
+case class CrawlResult[T](v:T,step:Int)
+
+class Worker(root:ActorRef,crawler:Crawler[T]) extends Actor {
+  crawler.emissions.subscribe(root ! CrawlResult(_))
+
+  def recieve = {
+    case ParsedDoc(doc) =>
+      crawler.recieve(doc)
+  }
+}
+
+class Worker1(root:ActorRef,crawler:Crawler[V,T]) extends Actor {
+  crawler.emissions.subscribe(root ! CrawlResult(_))
+
+  def recieve = {
+    case ParsedDoc1(v,doc) =>
+      crawler.recieve(v,doc)
+  }
+}
+
+class RootPipelineBuilder(system:ActorSystem) {
+  def >>[T](c:RootCrawler[T]):PipelineBuilder[T] = {
+    val workerRouter = system.actorOf(Props(classOf[Worker],c).withRouter(SmallestMailboxRouter(10)), "routed-fetcher")
+    PipelineBuilder[T](system,List(workerRouter))
+  }
+}
+
+object PipelineBuilder {
+  def apply(system:ActorSystem) = RootPipelineBuilder(system)
+  def apply[T](system:ActorSystem,pipelineSteps:List[ActorRef]) =
+    PipelineBuilder[T](system,pipelineSteps)
+}
+
+class PipelineBuilder[T](system:ActorSystem,pipelineSteps:List[ActorRef]) {
+  def >>[V,T](c:Crawler[T,U]):Pipeline[U] = {
+    val workerRouter = system.actorOf(Props(classOf[Worker],c).withRouter(SmallestMailboxRouter(10)), "routed-fetcher")
+    Pipeline[U](system,pipelineSteps ++ List(workerRouter))
+  }
+}
+
+trait Pipeline[T] = {
+  def >>[T,V](c:Crawler[T,V]):Pipeline[V]
+}
+
+
+
 trait Crawlable { def url:URL }
 
 case class Category(root:String,name:String,url:URL) extends Crawlable
 
-trait Crawler[T] {
-  def recieve(doc:Document):Unit
-  protected def emit[T](v:T):Unit
+trait Emitter[T] {
+  private val publishSubject = PublishSubject.create[T]()
+  val emissions = Observable(publishSubject)
+
+  protected def emit(v:T):Unit = observable.onNext(v)
 }
 
-case class CategoryCrawler extends UrlCrawler[Category] {
+trait Crawler[T] extends Emitter[T] {
+  def recieve(doc:Document):Unit
+}
+
+trait DownstreamCrawler[V <: Crawlable,T] extends Emitter[T] {
+  def recieve(v:V,doc:Document):Unit
+}
+
+
+class CategoryCrawler extends RootCrawler[Category] {
   def recieve(doc:Document) = {
     val title =
       doc.getElementsByTag("h1")
@@ -68,7 +181,7 @@ case class CategoryCrawler extends UrlCrawler[Category] {
 
 case class ResourceHeader(category:Category,url:Url) extends Crawlable
 
-case class SubcategoryCrawler extends Crawler[Category,ResourceHeader] {
+class SubcategoryCrawler() extends Crawler[Category,ResourceHeader] {
   def recieve(category:Cateogry,doc:Document) = {
     doc.getElementById("listAgencies")
       .getElementsByTag("li")
@@ -85,7 +198,16 @@ case class SubcategoryCrawler extends Crawler[Category,ResourceHeader] {
   }
 }
 
-case class ResourceCrawler extends Crawler[ResourceHeader,Resource] {
+case class Resource(category:Category,
+                    name:String,
+                    websites:List[String],
+                    phones:List[String],
+                    addresses:List[String],
+                    zipCodes:List[String],
+                    emails:List[String],
+                    description:String)
+
+class ResourceCrawler() extends Crawler[ResourceHeader,Resource] {
   def recieve(header:ResourceHeader,doc:Document) = {
     val div =
       doc.getElementsByTag("div")
